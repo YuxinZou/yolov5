@@ -193,6 +193,7 @@ class LoadImages:
         self.img_size = img_size
         self.stride = stride
         self.files = images + videos
+        # 合并图片和视频文件并给定flag
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
