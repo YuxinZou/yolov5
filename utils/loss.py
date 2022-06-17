@@ -91,8 +91,6 @@ class QFocalLoss(nn.Module):
 
 
 class ComputeLoss:
-    sort_obj_iou = False
-
     # Compute losses
     def __init__(self, model, autobalance=False):
         device = next(model.parameters()).device  # get model device
@@ -107,6 +105,7 @@ class ComputeLoss:
         # Class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
         self.cp, self.cn = smooth_BCE(
             eps=h.get('label_smoothing', 0.0))  # positive, negative BCE targets
+        self.sort_obj_iou = h.get('sorted_iou', False)
 
         # Focal loss
         g = h['fl_gamma']  # focal loss gamma
@@ -172,6 +171,7 @@ class ComputeLoss:
                 # Objectness loss stpe1
                 iou = iou.detach().clamp(0).type(tobj.dtype)
                 if self.sort_obj_iou:
+
                     # https://github.com/ultralytics/yolov5/issues/3605
                     # There maybe several GTs match the same anchor when calculate ComputeLoss in the scene with dense targets
                     # 排序之后 如果同一个grid出现两个gt 那么我们经过排序之后每个grid中的score_iou都能保证是最大的
