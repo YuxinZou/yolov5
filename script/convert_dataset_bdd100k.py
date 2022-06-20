@@ -250,28 +250,29 @@ def generate_bdd10k_yolo():
 
 
 def generate_bdd100k_yolo(mode='train'):
-    root = f'images/{mode}/bdd100k/{mode}'
-
-    os.makedirs(f'labels/{mode}/bdd100k/{mode}', exist_ok=True)
-    image_folder = root
+    image_folder = f'/newdata/yuxinzou/code/yolov5/datasets/qianhai_clean/images/train/bdd100k/100k/{mode}'
+    dst = image_folder.replace('images', 'labels')
+    os.makedirs(dst, exist_ok=True)
     label_folder = f'/mnt/yfs/sharedir/industrial/PUBLIC/detection/DataSets/BDD100K/bdd100k/labels/100k/{mode}'
     images = glob.glob(f"{image_folder}/*.jpg")
     print(len(images))
-    fi = open(f'train_bdd100k.txt', 'w')
+    fi = open(f'{mode}_bdd100k.txt', 'w')
     for i in tqdm(images):
-        print(i)
-        fi.write(f'datasets/peoplecar/{i}' + '\n')
+        name = '/'.join(i.split('/')[5:])
+        print(name)
+        fi.write(f'{name}' + '\n')
         i = i.split('/')[-1]
         json_file = os.path.join(label_folder, i.replace('jpg', 'json'))
         print(json_file)
         assert os.path.isfile(json_file), f'json_file: {json_file}'
         img = cv2.imread(os.path.join(image_folder, i))
         h, w, _ = img.shape
-        txt_file = os.path.join(f'labels/{mode}/bdd100k/{mode}', i.replace('jpg', 'txt'))
+        txt_file = os.path.join(dst, i.replace('jpg', 'txt'))
         print(txt_file)
-        # json2txt(json_file, txt_file, h, w)
+        json2txt(json_file, txt_file, h, w)
     fi.close()
 
 
 if __name__ == '__main__':
-    check_bdd10k()
+    # check_bdd10k()
+    generate_bdd100k_yolo(mode='train')
