@@ -285,7 +285,11 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     hyp['qfl'] = opt.qfl
     model.nc = nc  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
-    model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
+    if opt.noclassweight:
+        model.class_weights = torch.ones(nc).double().to(device)
+    else:
+        model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
+    print(model.class_weights)
     model.names = names
 
     # Start training
@@ -495,6 +499,7 @@ def parse_opt(known=False):
     parser.add_argument('--evolve', type=int, nargs='?', const=300, help='evolve hyperparameters for x generations')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache', type=str, nargs='?', const='ram', help='--cache images in "ram" (default) or "disk"')
+    parser.add_argument('--noclassweight', action='store_true', help='using class weight')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')

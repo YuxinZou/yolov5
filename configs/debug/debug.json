@@ -1,0 +1,8 @@
+{
+  "name": "yuxin-debug",
+  "Image": "harbor.smoa.cc/public/smore_core_timm:v2.1.3.cu11",
+  "arch": "ampere",
+  "Command": "cd ~/code/Yolov5_StrongSORT_OSNet/;sleep 20h",
+  "GPU": 1,
+  "DEBUG": true
+}

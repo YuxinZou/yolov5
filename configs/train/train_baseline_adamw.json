@@ -1,8 +1,0 @@
-{
-  "name": "yuxin-yolov5-train-baseline-adamw",
-  "Image": "10.81.138.201:5000/smore_core:v2.0.2.cu11",
-  "arch": "ampere",
-  "Command": "cd ~/code/yolov5/;~/miniconda3/envs/yolov5/bin/python -m torch.distributed.run --nproc_per_node 4 train.py --batch 128 --img 1280 --epochs 300 --data data/qianhai.yaml --weights weights/yolov5s.pt --hyp data/hyps/hyp.qianhai-low.yaml --cfg models/qianhai_yolov5s.yaml --optimizer AdamW --sync-bn --device 0,1,2,3",
-  "GPU": 4,
-  "DEBUG": false
-}

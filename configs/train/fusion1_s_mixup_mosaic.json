@@ -1,0 +1,9 @@
+{
+  "name": "fusion1-s-mixup-mosiac",
+  "Image": "harbor.smoa.cc/public/smore_core_timm:v2.1.3.cu11",
+  "arch": "ampere",
+  "Command": "cd ~/code/yolov5/;~/miniconda3/envs/yolov5/bin/python -m torch.distributed.run --nproc_per_node 4 train.py --batch 128 --img 1280 --epochs 100 --data data/qianhai_clean_add0616_public_bdd100k.yaml --weights weights/yolov5s.pt --hyp data/hyps/hyp.qianhai-low-mixup-mosaic.yaml --cfg models/qianhai_yolov5s.yaml --sync-bn --device 0,1,2,3 --name fusion1-s-mixup-mosiac --exist-ok",
+  "GPU": 4,
+  "DEBUG": false,
+  "Node": "node87"
+}

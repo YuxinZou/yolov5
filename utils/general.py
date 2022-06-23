@@ -813,6 +813,7 @@ def bbox_iou(box1, box2, x1y1x2y2=True, GIoU=False, DIoU=False, CIoU=False, eps=
     else:
         return iou  # IoU
 
+
 def NMS(boxes, scores, iou_thres, GIoU=False, DIoU=False, CIoU=False):
     """
     :param boxes:  (Tensor[N, 4])): are expected to be in ``(x1, y1, x2, y2)
@@ -890,6 +891,7 @@ def non_max_suppression(prediction,
             continue
 
         # Compute conf
+        # x[:, 5:] = torch.sqrt(x[:, 5:] * x[:, 4:5])
         x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)

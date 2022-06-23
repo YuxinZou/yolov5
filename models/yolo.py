@@ -43,6 +43,8 @@ class Decoupled(nn.Module):
         self.nl = len(anchors)  # number of detection layers 3
         self.na = len(anchors[0]) // 2  # number of anchors 3
         self.merge = Conv(ch, 256 * width, 1, 1)
+        self.prior_prob = 1e-2
+
         self.cls_convs1 = Conv(256 * width, 256 * width, 3, 1, 1)
         self.cls_convs2 = Conv(256 * width, 256 * width, 3, 1, 1)
         self.reg_convs1 = Conv(256 * width, 256 * width, 3, 1, 1)
@@ -50,6 +52,17 @@ class Decoupled(nn.Module):
         self.cls_preds = nn.Conv2d(256 * width, self.nc * self.na, 1)
         self.reg_preds = nn.Conv2d(256 * width, 4 * self.na, 1)
         self.obj_preds = nn.Conv2d(256 * width, 1 * self.na, 1)
+
+        self.initialize_biases()
+
+    def initialize_biases(self):
+        b = self.cls_preds.bias.view(self.na, -1)
+        b.data.fill_(-math.log((1 - self.prior_prob) / self.prior_prob))
+        self.cls_preds.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
+
+        b = self.reg_preds.bias.view(self.na, -1)
+        b.data.fill_(-math.log((1 - self.prior_prob) / self.prior_prob))
+        self.reg_preds.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def forward(self, x):
         x = self.merge(x)
