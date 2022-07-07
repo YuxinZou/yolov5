@@ -283,6 +283,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     hyp['label_smoothing'] = opt.label_smoothing
     hyp['sorted_iou'] = opt.sorted_iou
     hyp['qfl'] = opt.qfl
+    hyp['iou_aware'] = opt.iou_aware
+    hyp['iou_type'] = opt.iou_type
     model.nc = nc  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
     if opt.noclassweight:
@@ -302,7 +304,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
     stopper = EarlyStopping(patience=opt.patience)
-    compute_loss = ComputeLoss(model)  # init loss class
+    compute_loss = ComputeLoss(model, iou_aware=hyp.get('iou_aware', False)) # init loss class
     callbacks.run('on_train_start')
     LOGGER.info(f'Image sizes {imgsz} train, {imgsz} val\n'
                 f'Using {train_loader.num_workers * WORLD_SIZE} dataloader workers\n'
@@ -348,7 +350,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
             # Multi-scale
             if opt.multi_scale:
-                sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                sz = random.randrange(imgsz * 0.8, imgsz * 1.2 + gs) // gs * gs  # size
                 sf = sz / max(imgs.shape[2:])  # scale factor
                 if sf != 1:
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
@@ -514,6 +516,8 @@ def parse_opt(known=False):
     parser.add_argument('--cos-lr', action='store_true', help='cosine LR scheduler')
     parser.add_argument('--label-smoothing', type=float, default=0.0, help='Label smoothing epsilon')
     parser.add_argument('--qfl', action='store_true', help='use qfl loss')
+    parser.add_argument('--iou-type', default='CIoU', help='iou loss type')
+    parser.add_argument('--iou-aware', action='store_true', help='use iou aware')
     parser.add_argument('--sorted-iou', action='store_true', help='label assign config')
     parser.add_argument('--albu-p', type=float, default=0.01, help='albu p')
     parser.add_argument('--patience', type=int, default=100, help='EarlyStopping patience (epochs without improvement)')

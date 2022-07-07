@@ -1,0 +1,8 @@
+{
+  "name": "fusion2-filter",
+  "Image": "harbor.smoa.cc/public/smore_core_timm:v2.1.3.cu11",
+  "arch": "ampere",
+  "Command": "cd ~/code/yolov5/;~/miniconda3/envs/yolov5/bin/python -m torch.distributed.run --nproc_per_node 4 train.py --batch 64 --img 1280 --epochs 150 --data data/qianhai_clean_add0616_public_bdd100k.yaml --weights weights/yolov5m.pt  --hyp data/hyps/hyp.qianhai-high.yaml --cfg models/qianhai_yolov5m.yaml --sync-bn --sorted-iou --device 0,1,2,3 --name fusion2-filter --exist-ok",
+  "GPU": 4,
+  "DEBUG": false
+}

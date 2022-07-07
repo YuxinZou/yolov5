@@ -68,17 +68,28 @@ def pred2labelme(img_folder, label_folder, json_folder):
 
 
 def pred2labelmeall():
-    root = '../runs/detect/detect_baseline_yolov5m_16videos'
-    for i in tqdm(os.listdir(root)):
-        if i.startswith('DM') or i.startswith('DH'):
+    root = 'D:/data/前海/new_16'
+    for path, dir_list, file_list in os.walk(root):
+        if len(dir_list) > 10:
             continue
-        subfolder = os.path.join(root, i)
-        img_folder = os.path.join(subfolder, 'img_ori')
-        label_folder = os.path.join(subfolder, 'labels')
-        json_folder = os.path.join('../runs/detect/labelme', find_unchinese(clean(i)))
-        os.makedirs(json_folder, exist_ok=True)
-        print(json_folder)
-        pred2labelme(img_folder, label_folder, json_folder)
+        for dir_name in dir_list:
+            img_folder = f'{path}/{dir_name}'
+            json_folder = img_folder.replace('new_16', 'new_16_json')
+            os.makedirs(json_folder, exist_ok=True)
+            label_folder = os.path.join(subfolder, 'labels')
+
+
+
+
+
+    # for i in tqdm(os.listdir(root)):
+    #     subfolder = os.path.join(root, i)
+    #     img_folder = os.path.join(subfolder, 'img_ori')
+    #     label_folder = os.path.join(subfolder, 'labels')
+    #     json_folder = os.path.join('../runs/detect/labelme', find_unchinese(clean(i)))
+    #     os.makedirs(json_folder, exist_ok=True)
+    #     print(json_folder)
+    #     pred2labelme(img_folder, label_folder, json_folder)
 
 
 def extract_partial_data():
@@ -99,4 +110,4 @@ def extract_partial_data():
 
 
 if __name__ == '__main__':
-    extract_partial_data()
+    pred2labelmeall()

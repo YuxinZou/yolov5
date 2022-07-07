@@ -53,7 +53,7 @@ class Decoupled(nn.Module):
         self.reg_preds = nn.Conv2d(256 * width, 4 * self.na, 1)
         self.obj_preds = nn.Conv2d(256 * width, 1 * self.na, 1)
 
-        self.initialize_biases()
+        # self.initialize_biases()
 
     def initialize_biases(self):
         b = self.cls_preds.bias.view(self.na, -1)
@@ -78,6 +78,83 @@ class Decoupled(nn.Module):
         x22 = self.obj_preds(x2)
         out = torch.cat([x21, x22, x1], 1)
         return out
+
+
+class DetectIouAware(nn.Module):
+    stride = None  # strides computed during build
+    onnx_dynamic = False  # ONNX export parameter
+    export = False  # export mode
+
+    def __init__(self, nc=80, anchors=(), ch=(),
+                 inplace=True, iou_aware_factor=0.4):  # detection layer
+        super().__init__()
+        self.iou_aware_factor = iou_aware_factor
+        self.nc = nc  # number of classes
+        self.no = nc + 5 + 1  # number of outputs per anchor
+        self.nl = len(anchors)  # number of detection layers
+        self.na = len(anchors[0]) // 2  # number of anchors
+        self.grid = [torch.zeros(1)] * self.nl  # init grid
+        self.anchor_grid = [torch.zeros(1)] * self.nl  # init anchor grid
+        self.register_buffer('anchors',
+                             torch.tensor(anchors).float().view(self.nl, -1,
+                                                                2))  # shape(nl,na,2)
+        self.m = nn.ModuleList(
+            nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
+        self.inplace = inplace  # use in-place ops (e.g. slice assignment)
+
+    def forward(self, x):
+        z = []  # inference output
+        for i in range(self.nl):
+            x[i] = self.m[i](x[i])  # conv
+            bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,85,20,20)
+            x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4,
+                                                                   2).contiguous()
+
+            if not self.training:  # inference
+                if self.onnx_dynamic or self.grid[i].shape[2:4] != x[i].shape[
+                                                                   2:4]:
+                    self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny,
+                                                                        i)
+
+                y = x[i].sigmoid()
+                if self.inplace:
+                    y[..., 0:2] = (y[..., 0:2] * 2 + self.grid[i]) * \
+                                  self.stride[i]  # xy
+                    y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[
+                        i]  # wh
+                else:  # for YOLOv5 on AWS Inferentia https://github.com/ultralytics/yolov5/pull/2953
+                    xy, wh, conf = y.split((2, 2, self.nc + 1),
+                                           4)  # y.tensor_split((2, 4, 5), 4)  # torch 1.8.0
+                    xy = (xy * 2 + self.grid[i]) * self.stride[i]  # xy
+                    wh = (wh * 2) ** 2 * self.anchor_grid[i]  # wh
+                    y = torch.cat((xy, wh, conf), 4)
+
+                xy, wh, obj, ioup, cls = y.split((2, 2, 1, 1, self.nc), 4)
+                obj_t = (obj ** (1 - self.iou_aware_factor)) * (
+                        ioup ** self.iou_aware_factor)
+                y = torch.cat((xy, wh, obj_t, cls), 4)
+
+                z.append(y.view(bs, -1, self.no-1))
+
+        return x if self.training else (torch.cat(z, 1),) if self.export else (
+            torch.cat(z, 1), x)
+
+    def _make_grid(self, nx=20, ny=20, i=0):
+        d = self.anchors[i].device
+        t = self.anchors[i].dtype
+        shape = 1, self.na, ny, nx, 2  # grid shape
+        y, x = torch.arange(ny, device=d, dtype=t), torch.arange(nx, device=d,
+                                                                 dtype=t)
+        if check_version(torch.__version__,
+                         '1.10.0'):  # torch>=1.10.0 meshgrid workaround for torch>=0.7 compatibility
+            yv, xv = torch.meshgrid(y, x, indexing='ij')
+        else:
+            yv, xv = torch.meshgrid(y, x)
+        grid = torch.stack((xv, yv), 2).expand(
+            shape) - 0.5  # add grid offset, i.e. y = 2.0 * x - 0.5
+        anchor_grid = (self.anchors[i] * self.stride[i]).view(
+            (1, self.na, 1, 1, 2)).expand(shape)
+        return grid, anchor_grid
 
 
 class Detect(nn.Module):
@@ -189,7 +266,7 @@ class Model(nn.Module):
         # Build strides, anchors
         # 通过输入和输出尺寸得到stride的大小
         m = self.model[-1]  # Detect()
-        if isinstance(m, Detect) or isinstance(m, DecoupledDetect):
+        if isinstance(m, (Detect, DetectIouAware, DecoupledDetect)):
             s = 256  # 2x min stride
             m.inplace = self.inplace
             # [8, 16, 32]
@@ -273,8 +350,7 @@ class Model(nn.Module):
         return y
 
     def _profile_one_layer(self, m, x, dt):
-        c = isinstance(m, Detect) or isinstance(m,
-                                                DecoupledDetect)  # is final layer, copy input as inplace fix
+        c = isinstance(m, (DetectIouAware, Detect, DecoupledDetect))  # is final layer, copy input as inplace fix
         o = thop.profile(m, inputs=(x.copy() if c else x,), verbose=False)[
                 0] / 1E9 * 2 if thop else 0  # FLOPs
         t = time_sync()
@@ -293,8 +369,6 @@ class Model(nn.Module):
         # https://arxiv.org/abs/1708.02002 section 3.3
         # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1.
         m = self.model[-1]  # Detect() module
-        print(m)
-        print(type(m))
         if isinstance(m, DecoupledDetect):
             pass
         else:
@@ -337,7 +411,7 @@ class Model(nn.Module):
         # Apply to(), cpu(), cuda(), half() to model tensors that are not parameters or registered buffers
         self = super()._apply(fn)
         m = self.model[-1]  # Detect()
-        if isinstance(m, Detect) or isinstance(m, DecoupledDetect):
+        if isinstance(m, (Detect, DetectIouAware, DecoupledDetect)):
             m.stride = fn(m.stride)
             m.grid = list(map(fn, m.grid))
             if isinstance(m.anchor_grid, list):
@@ -384,7 +458,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m is Detect or m is DecoupledDetect:
+        # elif isinstance(m, (Detect, DetectIouAware, DecoupledDetect)):
+        elif m is Detect or m is DecoupledDetect or m is DetectIouAware:
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)

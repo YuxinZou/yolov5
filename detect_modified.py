@@ -29,6 +29,7 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 
@@ -123,9 +124,9 @@ def run(
         # subfolder
         subfolder = increment_path(save_dir / Path(path).stem, mkdir=True, exist_ok=True)
         # print(f'subfolder: {subfolder}')
-        (subfolder / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
-        (subfolder / 'img_ori' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
-        (subfolder / 'img_det' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
+        # (subfolder / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+        # (subfolder / 'img_ori' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
+        # (subfolder / 'img_det' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
 
         # Inference
         visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
@@ -165,7 +166,13 @@ def run(
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
+                w = det[:, 2] - det[:, 0]
+                h = det[:, 3] - det[:, 1]
+                areas = torch.sqrt(w * h)
+                # print(areas)
+                print(torch.min(areas))
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
+
 
                 # Print results
                 for c in det[:, -1].unique():
@@ -198,8 +205,8 @@ def run(
                 if dataset.mode == 'image':
                     cv2.imwrite(save_path, im0)
                 else:  # 'video' or 'stream'
-                    cv2.imwrite(f'{img_ori_path}.jpg', im0s)
-                    cv2.imwrite(f'{img_det_path}.jpg', im0)
+                    #cv2.imwrite(f'{img_ori_path}.jpg', im0s)
+                    #cv2.imwrite(f'{img_det_path}.jpg', im0)
                     if vid_path[i] != save_path:  # new video
                         vid_path[i] = save_path
                         if isinstance(vid_writer[i], cv2.VideoWriter):

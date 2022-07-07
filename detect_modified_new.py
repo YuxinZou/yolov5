@@ -29,6 +29,7 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 
@@ -39,7 +40,7 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 from models.common import DetectMultiBackend
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams
+from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadStreams, LoadImagesSetFps
 from utils.general import (LOGGER, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
@@ -74,7 +75,6 @@ def run(
         hide_conf=False,  # hide confidences
         half=False,  # use FP16 half-precision inference
         dnn=False,  # use OpenCV DNN for ONNX inference
-        area_thres=0,
 ):
     source = str(source)
     save_img = not nosave and not source.endswith('.txt')  # save inference images
@@ -89,7 +89,6 @@ def run(
     # Directories
     # 会检测当前的exp到第几个了，做个增量的文件夹命名
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
-    (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
     # Load model
     device = select_device(device)
@@ -122,6 +121,14 @@ def run(
         t2 = time_sync()
         dt[0] += t2 - t1
 
+        # subfolder
+        subfolder = increment_path(save_dir, mkdir=True, exist_ok=True)
+        # subfolder = increment_path(save_dir / Path(path).stem, mkdir=True, exist_ok=True)
+        # print(f'subfolder: {subfolder}')
+        (subfolder / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+        # (subfolder / 'img_ori' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
+        # (subfolder / 'img_det' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
+
         # Inference
         visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
         pred = model(im, augment=augment, visualize=visualize)
@@ -146,24 +153,27 @@ def run(
                 p, im0, frame = path, im0s.copy(), getattr(dataset, 'frame', 0)
 
             p = Path(p)  # to Path
-            save_path = str(save_dir / p.name)  # im.jpg
-            txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
+            save_path = str(subfolder / p.name)  # im.jpg
+            txt_path = str(subfolder / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
+            img_ori_path = str(subfolder / 'img_ori' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
+            img_det_path = str(subfolder / 'img_det' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # im.txt
+            # print(f'save_path: {save_path}')
+            # print(f'txt_path: {txt_path}')
+            # print(f'img_ori_path: {img_ori_path}')
+            # print(f'img_det_path: {img_det_path}')
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             if len(det):
                 # Rescale boxes from img_size to im0 size
+                # w = det[:, 2] - det[:, 0]
+                # h = det[:, 3] - det[:, 1]
+                # areas = torch.sqrt(w * h)
+                # # print(areas)
+                # print(torch.min(areas))
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
-                print(det)
-                w = det[:, 2] - det[:, 0]
-                h = det[:, 3] - det[:, 1]
-                areas = torch.sqrt(w * h)
-                print(area_thres)
-                mask = areas <= area_thres
-                det = det[mask]
-                print(mask)
-                print(det)
+
 
                 # Print results
                 for c in det[:, -1].unique():
@@ -194,8 +204,11 @@ def run(
             # Save results (image with detections)
             if save_img:
                 if dataset.mode == 'image':
-                    cv2.imwrite(save_path, im0)
+                    pass
+                    # cv2.imwrite(save_path, im0)
                 else:  # 'video' or 'stream'
+                    # cv2.imwrite(f'{img_ori_path}.jpg', im0s)
+                    # cv2.imwrite(f'{img_det_path}.jpg', im0)
                     if vid_path[i] != save_path:  # new video
                         vid_path[i] = save_path
                         if isinstance(vid_writer[i], cv2.VideoWriter):
@@ -251,7 +264,6 @@ def parse_opt():
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
-    parser.add_argument('--area-thres', default=0, type=int)
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
@@ -261,7 +273,16 @@ def parse_opt():
 def main(opt):
     # 加测依赖有没有安装
     check_requirements(exclude=('tensorboard', 'thop'))
-    run(**vars(opt))
+    # run(**vars(opt))
+    source = opt.source
+    for path,dir_list,file_list in os.walk(source):
+        if len(dir_list) > 10:
+            continue
+        for dir_name in dir_list:
+            opt.source = os.path.join(path, dir_name)
+            opt.name = os.path.join(path, dir_name)
+            print(opt)
+            run(**vars(opt))
 
 
 if __name__ == "__main__":

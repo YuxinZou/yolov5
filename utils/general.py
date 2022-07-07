@@ -936,8 +936,8 @@ def non_max_suppression(prediction,
                 i = i[iou.sum(1) > 1]  # require redundancy
 
         output[xi] = x[i]
-        if (time.time() - t) > time_limit:
-            LOGGER.warning(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
+        # if (time.time() - t) > time_limit:
+        #     LOGGER.warning(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
             # break  # time limit exceeded
 
     return output

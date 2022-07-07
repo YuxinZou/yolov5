@@ -55,6 +55,21 @@ def save_one_txt(predn, save_conf, shape, file):
             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
 
+def filter_area(bbox, area_thres=0, type='pred'):
+    if len(bbox) == 0:
+        return bbox
+    if type == 'pred':
+        w = bbox[:, 2] - bbox[:, 0]
+        h = bbox[:, 3] - bbox[:, 1]
+    else:
+        w = bbox[:, 3]
+        h = bbox[:, 4]
+    areas = torch.sqrt(w * h)
+    mask = areas >= area_thres
+    det = bbox[mask]
+    return det
+
+
 def save_one_json(predn, jdict, path, class_map):
     # Save one JSON result {"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}
     image_id = int(path.stem) if path.stem.isnumeric() else path.stem
@@ -122,6 +137,7 @@ def run(
         plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
+        area_thres=0,
 ):
     # Initialize/load model and set device
     training = model is not None
@@ -220,6 +236,10 @@ def run(
         # Metrics
         for si, pred in enumerate(out):
             labels = targets[targets[:, 0] == si, 1:]
+
+            pred = filter_area(pred, area_thres=area_thres, type='pred')
+            labels = filter_area(labels, area_thres=area_thres, type='dt')
+
             nl, npr = labels.shape[0], pred.shape[0]  # number of labels, predictions
             path, shape = Path(paths[si]), shapes[si][0]
             correct = torch.zeros(npr, niou, dtype=torch.bool, device=device)  # init
@@ -233,6 +253,7 @@ def run(
             # Predictions
             if single_cls:
                 pred[:, 5] = 0
+
             predn = pred.clone()
             scale_coords(im[si].shape[1:], predn[:, :4], shape, shapes[si][1])  # native-space pred
 
@@ -350,6 +371,7 @@ def parse_opt():
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
+    parser.add_argument('--area-thres', default=0, type=int)
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
     opt.save_json |= opt.data.endswith('coco.yaml')
