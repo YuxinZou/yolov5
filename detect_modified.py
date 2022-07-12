@@ -104,7 +104,7 @@ def run(
         bs = len(dataset)  # batch_size
     else:
         # pt默认是true，说明是pt权重
-        dataset = LoadImagesSetFps(source, img_size=imgsz, stride=stride, auto=pt, fps=25)
+        dataset = LoadImagesSetFps(source, img_size=imgsz, stride=stride, auto=pt, fps=1)
         bs = 1  # batch_size
     vid_path, vid_writer = [None] * bs, [None] * bs
 

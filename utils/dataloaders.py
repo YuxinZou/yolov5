@@ -734,14 +734,24 @@ class LoadImagesAndLabels(Dataset):
         labels_out = torch.zeros((nl, 6))
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
-        print(img.shape)
-        print(labels_out)
-        print(shapes)
+            labels_out = self.filter_area(labels_out, img.shape, hyp['area_thres'])
+
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
 
         return torch.from_numpy(img), labels_out, self.im_files[index], shapes
+
+    def filter_area(self, bbox, img_shape, area_thres=0):
+        H, W, _ = img_shape
+        if len(bbox) == 0:
+            return bbox
+        w = bbox[:, 4] * W
+        h = bbox[:, 5] * H
+        areas = torch.sqrt(w * h)
+        mask = areas >= area_thres
+        det = bbox[mask]
+        return det
 
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)

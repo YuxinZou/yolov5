@@ -1,0 +1,16 @@
+./images/testset_images/qianhai_1 223 26 0 5 254
+./images/testset_images/卡口晚上_LS-KK2701南环路枫林路桥西向东_001_2021-04-29-19-20-24_2021-04-29-19-50-25_cut 0 0 0 0 0
+./images/testset_images/城市道路晚上_SF-JK0085人民北路白石港公交站台_001_2021-04-29-19-14-24_2021-04-29-19-18-00_cut 62 152 2 6 222
+./images/testset_images/城市道路白天_SF-JK0085人民北路白石港公交站台_001_2021-04-29-11-08-24_2021-04-29-11-15-36_cut 160 192 1 14 367
+./images/testset_images/小区白天_TY-JK0732湘银小区2号岗亭_001_2021-04-29-08-22-48_2021-04-29-08-30-00_cut 118 35 1 1 155
+./images/testset_images/晴天夜间_十字路口1080P@4M_cut 26 131 0 2 159
+./images/testset_images/晴天夜间_城市人行道1080P@4M_cut 78 48 0 0 126
+./images/testset_images/晴天夜间_小区1080P@4M_cut 12 1 0 0 13
+./images/testset_images/晴天夜间_车站外1080P@4M_cut 19 7 2 1 29
+./images/testset_images/晴天白天_十字路口1080P@4M_cut 98 210 0 7 315
+./images/testset_images/晴天白天_城市人行道1080P@4M_cut 43 59 2 2 106
+./images/testset_images/晴天白天_小区1080P@4M_cut 55 7 0 0 62
+./images/testset_images/晴天白天_车站外1080P@4M_cut 97 49 1 1 148
+./images/testset_images/雨天白天_十字路口1080P@4M_cut 29 211 1 6 247
+./images/testset_images/雨天白天_城市人行道1080P@4M_cut 18 58 1 3 80
+./images/testset_images/雨天白天_小区1080P@4M_cut 11 3 0 0 14

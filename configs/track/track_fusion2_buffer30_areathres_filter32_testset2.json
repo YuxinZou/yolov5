@@ -1,0 +1,8 @@
+{
+  "name": "track-tensorrt-buffer30-countthres480-filter32-2",
+  "Image": "harbor.smoa.cc/public/smore_core_timm:v2.1.3.cu11",
+  "arch": "ampere",
+  "Command": "cd ~/code/yolov5/;~/miniconda3/envs/yolov5/bin/python track_bytetrack.py --yolo-weights runs/train/fusion2/weights/best.onnx --half --source video/第二批人车计数测试集 --imgsz 736 1280 --name tensorrt_buffer_30_countthres480_filter32_2 --exist-ok --conf-thres 0.1 --area-thres 32 --track-buffer 30 --count-thres 5 15 --area-boundary 100 480 --gt gt2_filter.txt",
+  "GPU": 1,
+  "DEBUG": false
+}

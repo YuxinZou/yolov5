@@ -1,0 +1,16 @@
+./yolov5/images/testset_images/qianhai_1 128 20 0 5 153
+./yolov5/images/testset_images/卡口晚上_LS-KK2701南环路枫林路桥西向东_001_2021-04-29-19-20-24_2021-04-29-19-50-25_cut 0 29 0 0 29
+./yolov5/images/testset_images/城市道路晚上_SF-JK0085人民北路白石港公交站台_001_2021-04-29-19-14-24_2021-04-29-19-18-00_cut 45 87 1 2 135
+./yolov5/images/testset_images/城市道路白天_SF-JK0085人民北路白石港公交站台_001_2021-04-29-11-08-24_2021-04-29-11-15-36_cut 102 101 1 9 213
+./yolov5/images/testset_images/小区白天_TY-JK0732湘银小区2号岗亭_001_2021-04-29-08-22-48_2021-04-29-08-30-00_cut 91 21 0 2 114
+./yolov5/images/testset_images/晴天夜间_十字路口1080P@4M_cut 21 101 0 1 123
+./yolov5/images/testset_images/晴天夜间_城市人行道1080P@4M_cut 66 34 0 0 100
+./yolov5/images/testset_images/晴天夜间_小区1080P@4M_cut 6 1 0 0 7
+./yolov5/images/testset_images/晴天夜间_车站外1080P@4M_cut 38 6 2 3 49
+./yolov5/images/testset_images/晴天白天_十字路口1080P@4M_cut 76 132 0 4 212
+./yolov5/images/testset_images/晴天白天_城市人行道1080P@4M_cut 43 68 0 1 112
+./yolov5/images/testset_images/晴天白天_小区1080P@4M_cut 55 4 0 0 59
+./yolov5/images/testset_images/晴天白天_车站外1080P@4M_cut 72 17 0 0 89
+./yolov5/images/testset_images/雨天白天_十字路口1080P@4M_cut 27 115 1 1 144
+./yolov5/images/testset_images/雨天白天_城市人行道1080P@4M_cut 18 52 0 2 72
+./yolov5/images/testset_images/雨天白天_小区1080P@4M_cut 7 11 0 0 18

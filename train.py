@@ -219,6 +219,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
     # Trainloader
     hyp['albu_p'] = opt.albu_p
+    hyp['area_thres'] = opt.area_thres
     train_loader, dataset = create_dataloader(train_path,
                                               imgsz,
                                               batch_size // WORLD_SIZE,
@@ -291,7 +292,6 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         model.class_weights = torch.ones(nc).double().to(device)
     else:
         model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
-    print(model.class_weights)
     model.names = names
 
     # Start training
@@ -350,7 +350,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
 
             # Multi-scale
             if opt.multi_scale:
-                sz = random.randrange(imgsz * 0.8, imgsz * 1.2 + gs) // gs * gs  # size
+                sz = random.randrange(imgsz * 0.5, imgsz * 1.2 + gs) // gs * gs  # size
                 sf = sz / max(imgs.shape[2:])  # scale factor
                 if sf != 1:
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
@@ -407,7 +407,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                            save_dir=save_dir,
                                            plots=False,
                                            callbacks=callbacks,
-                                           compute_loss=compute_loss)
+                                           compute_loss=compute_loss,
+                                           area_thres=opt.area_thres)
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
@@ -518,6 +519,7 @@ def parse_opt(known=False):
     parser.add_argument('--qfl', action='store_true', help='use qfl loss')
     parser.add_argument('--iou-type', default='CIoU', help='iou loss type')
     parser.add_argument('--iou-aware', action='store_true', help='use iou aware')
+    parser.add_argument('--area-thres', default=0, type=int)
     parser.add_argument('--sorted-iou', action='store_true', help='label assign config')
     parser.add_argument('--albu-p', type=float, default=0.01, help='albu p')
     parser.add_argument('--patience', type=int, default=100, help='EarlyStopping patience (epochs without improvement)')
