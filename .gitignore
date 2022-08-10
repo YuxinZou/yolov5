@@ -258,3 +258,6 @@ datasets
 *.pth
 images
 video
+txt/
+json/
+*.ttf

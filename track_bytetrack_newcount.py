@@ -57,20 +57,25 @@ def filter_area(bbox, area_thres=0):
     return det
 
 
-def filter_edge(bbox, shape):
-    if len(bbox) == 0:
-        return bbox
-
-    mask = bbox[0] > 0 & bbox[1] > 0 & bbox[2] > shape[0] & bbox[3] > shape[1]
-    det = bbox[mask]
-    return det
-
-
 def linear_projection(area, area_boundary=(100, 720), count_boundary=(15, 15)):
     # 100 -> 720
     m = interp1d([area_boundary[1], area_boundary[0]], [count_boundary[0], count_boundary[1]])
     area = np.clip(area, area_boundary[0], area_boundary[1])
     return int(m(area))
+
+
+def check_border(roi, img_shape=(1920, 1080)):
+    for roi_ in roi:
+        assert roi_[0] >= 0 and roi_[1] >= 0 and roi_[2] <= img_shape[0] and roi_[3] <= img_shape[1], \
+            f'{roi_} out of image borader {img_shape}'
+    print('check passed')
+
+
+def check_in_roi(coord, roi):
+    if (roi[0] < coord[0] < roi[2]) and (roi[1] < coord[1] < roi[3]):
+        return True
+    else:
+        return False
 
 
 @torch.no_grad()
@@ -115,7 +120,7 @@ def run(
         area_boundary=(100, 720),
         gt='gt.txt',
         use_det=False,
-        filter_edge=False,
+        roi=(200, 200, 1720, 1080),
 ):
     source = str(source)
     save_img = not nosave and not source.endswith('.txt')  # save inference images
@@ -150,8 +155,8 @@ def run(
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt)
         nr_sources = len(dataset)
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
-        # dataset = LoadImagesSetFps(source, img_size=imgsz, stride=stride, auto=pt, fps=interval)
+        # dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
+        dataset = LoadImagesSetFps(source, img_size=imgsz, stride=stride, auto=pt, fps=interval)
         nr_sources = 1
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
 
@@ -162,10 +167,17 @@ def run(
     dt, seen = [0.0, 0.0, 0.0, 0.0], 0
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
 
-    static_dict = {0: {}, 1: {}, 2: {}, 3: {}}
-    all_count = [[], [], [], [], []]
-    ratio_dict = {0: [], 1: [], 2: [], 3: []}
-    results = []
+    roi = np.array(roi)
+    if len(roi.shape) == 1:
+        roi = roi[np.newaxis, :]
+    check_border(roi)
+
+    static_dict = dict()
+    all_count = dict()
+    for i in range(len(roi)):
+        static_dict.update({i: {0: {}, 1: {}, 2: {}, 3: {}}})
+        all_count.update({i: [[], [], [], [], []]})
+
     for frame_idx, (path, im, im0s, vid_cap, s) in tqdm(enumerate(dataset)):
         timer.tic()
         t1 = time_sync()
@@ -215,15 +227,15 @@ def run(
                 # Rescale boxes from img_size to im0 size
 
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
-                # det = filter_area(det, area_thres=area_thres)
+                det = filter_area(det, area_thres=area_thres)
 
                 det = det.cpu().data.numpy()
                 online_tlwhs = []
+                online_cxcy = []
                 online_ids = []
                 online_scores = []
                 for c in range(4):
                     x = det[(det[:, 5:6] == c).any(1)]
-
                     if x is not None and len(x):
                         online_targets = trackers[c].update(x[:, :5])
                         for t in online_targets:
@@ -231,49 +243,55 @@ def run(
                                 tlwh = t.det_tlwh
                             else:
                                 tlwh = t.tlwh
+                            cxcy = t.cxcy
                             tid = t.track_id
-                            area = np.sqrt(tlwh[2] * tlwh[3])
-                            if area <= area_thres:
-                                continue
-                            ratio_dict[c].append(tlwh[2] / tlwh[3])
                             online_tlwhs.append(tlwh)
+                            online_cxcy.append(cxcy)
+                            area = np.sqrt(tlwh[2] * tlwh[3])
                             online_ids.append(tid)
                             online_scores.append(t.score)
 
-                            if tid not in static_dict[c].keys():
-                                static_dict[c][tid] = [0, area]
-                            else:
-                                static_dict[c][tid][0] += 1
-                                static_dict[c][tid][1] = (static_dict[c][tid][1] * static_dict[c][tid][0] + area) / (
-                                        static_dict[c][tid][0] + 1)
-                                if static_dict[c][tid][0] > linear_projection(static_dict[c][tid][1], area_boundary,
-                                                                              count_thres) and tid not in all_count[-1]:
-                                    all_count[-1].append(tid)
-                                    all_count[c].append(tid)
+                            for roi_index, roi_ in enumerate(roi):
+
+                                id_in = check_in_roi(cxcy, roi_)
+
+                                if tid not in static_dict[roi_index][c].keys():
+                                    static_dict[roi_index][c][tid] = [0, area, id_in]
+                                else:
+                                    static_dict[roi_index][c][tid][-1] = static_dict[roi_index][c][tid][-1] or id_in
+                                    static_dict[roi_index][c][tid][0] += 1
+                                    static_dict[roi_index][c][tid][1] = (static_dict[roi_index][c][tid][1] *
+                                                                         static_dict[roi_index][c][tid][0] + area) / (
+                                                                                static_dict[roi_index][c][tid][0] + 1)
+                                    if static_dict[roi_index][c][tid][0] > linear_projection(
+                                            static_dict[roi_index][c][tid][1], area_boundary,
+                                            count_thres) and tid not in all_count[roi_index][-1] and static_dict[roi_index][c][tid][-1]:
+                                        all_count[roi_index][-1].append(tid)
+                                        all_count[roi_index][c].append(tid)
 
                 timer.toc()
                 online_im = plot_tracking(
-                    im0, online_tlwhs, online_ids, frame_id=frame_idx + 1, fps=1. / timer.average_time)
+                    im0, online_tlwhs, online_ids, frame_id=frame_idx + 1, fps=1. / timer.average_time, online_cxcy=online_cxcy)
             else:
                 timer.toc()
                 online_im = im0
 
             def get_postfix(c):
-                return ''
-                # return str(all_count[c][-1]) if len(all_count[c]) else ''
+                return str(all_count[0][c][-1]) if len(all_count[0][c]) else ''
 
-            online_im = cv2.putText(online_im, 'all: ' + str(len(all_count[-1])), (50, 300), cv2.FONT_HERSHEY_SIMPLEX,
+            online_im = cv2.rectangle(online_im, (roi[0][0], roi[0][1]), (roi[0][2], roi[0][3]), (0, 255, 0), 2)
+            online_im = cv2.putText(online_im, 'all: ' + str(len(all_count[0][-1])), (50, 300), cv2.FONT_HERSHEY_SIMPLEX,
                                     1, (255, 0, 0), 2, cv2.LINE_AA)
-            online_im = cv2.putText(online_im, f'people: {str(len(all_count[0]))} {str(get_postfix(0))}', (50, 100),
+            online_im = cv2.putText(online_im, f'people: {str(len(all_count[0][0]))} {str(get_postfix(0))}', (50, 100),
                                     cv2.FONT_HERSHEY_SIMPLEX,
                                     1, (255, 0, 0), 2, cv2.LINE_AA)
-            online_im = cv2.putText(online_im, f'car: {str(len(all_count[1]))} {str(get_postfix(1))}', (50, 150),
+            online_im = cv2.putText(online_im, f'car: {str(len(all_count[0][1]))} {str(get_postfix(1))}', (50, 150),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1,
                                     (255, 0, 0), 2, cv2.LINE_AA)
-            online_im = cv2.putText(online_im, f'bus: {str(len(all_count[2]))} {str(get_postfix(2))}', (50, 200),
+            online_im = cv2.putText(online_im, f'bus: {str(len(all_count[0][2]))} {str(get_postfix(2))}', (50, 200),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1,
                                     (255, 0, 0), 2, cv2.LINE_AA)
-            online_im = cv2.putText(online_im, f'truck: {str(len(all_count[3]))} {str(get_postfix(3))}', (50, 250),
+            online_im = cv2.putText(online_im, f'truck: {str(len(all_count[0][3]))} {str(get_postfix(3))}', (50, 250),
                                     cv2.FONT_HERSHEY_SIMPLEX,
                                     1, (255, 0, 0), 2, cv2.LINE_AA)
 
@@ -301,10 +319,10 @@ def run(
 
             prev_frames[i] = curr_frames[i]
 
-    print([len(i) for i in all_count])
+    print([len(i) for i in all_count[0]])
     txt_path = str(save_dir / 'result.txt')
     with open(txt_path, 'a+') as f:
-        s_ = ' '.join(map(str, [len(i) for i in all_count]))
+        s_ = ' '.join(map(str, [len(i) for i in all_count[0]]))
         s_ = source + ' ' + s_
         print(s_)
         f.write(s_ + '\n')
@@ -317,7 +335,7 @@ def run(
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(yolo_weights)  # update model (to fix SourceChangeWarning)
-    return s_, static_dict, ratio_dict
+    return s_, static_dict
 
 
 def parse_opt():
@@ -354,7 +372,7 @@ def parse_opt():
     parser.add_argument('--interval', default=3, type=int)
     parser.add_argument('--count-thres', default=(15, 15), nargs=2, type=int)
     parser.add_argument('--area-boundary', default=(100, 720), nargs=2, type=int)
-    parser.add_argument('--filter-edge', default=False, action='store_true', help='filter edge box')
+    parser.add_argument('--roi', default=(200, 200, 1720, 1080), nargs=4, type=int)
     parser.add_argument('--use-det', default=False, action='store_true', help='hide IDs')
     parser.add_argument("--track-thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track-buffer", type=int, default=10, help="the frames for keep lost tracks")
@@ -402,32 +420,32 @@ def metric(data1, data2):
 
 def main(opt):
     check_requirements(requirements=ROOT / 'requirements.txt', exclude=('tensorboard', 'thop'))
-    output = run(**vars(opt))
-    # if source.endswith('.mp4'):
-    #     print(opt)
-    #     s, josn_res, ratio_dict = run(**vars(opt))
-    #     # import pickle
-    #     # fw = open('./json/result.pkl', 'wb')
-    #     # pickle.dump(dict(id_dict=josn_res, ratio_dict=ratio_dict), fw)
-    # else:
-    #     dt = {}
-    #     dist_dict = {}
-    #     for fname in sorted(os.listdir(source)):
-    #         opt.source = os.path.join(source, fname)
-    #         s, josn_res, ratio_dict = run(**vars(opt))
-    #         s = s.strip().split(' ')
-    #         name = s[0].split('/')[-1].split('.')[0]
-    #         dt[name] = list(map(int, s[1:]))
-    #         dist_dict[name] = dict(id_dict=josn_res, ratio_dict=ratio_dict)
-    #     import pickle
-    #     fw = open('./json/result.pkl', 'wb')
-    #     pickle.dump(dist_dict, fw)
-    #     gt = parse(f'./txt/{opt.gt}')
-    #     res = metric(gt, dt)
-    #     for k, v in res.items():
-    #         print(k)
-    #         print(v)
-    #     print(np.mean([v['acc'] for k, v in res.items()]))
+    source = opt.source
+    if source.endswith('.mp4'):
+        print(opt)
+        run(**vars(opt))
+        # import pickle
+        # fw = open('./json/result.pkl', 'wb')
+        # pickle.dump(dict(id_dict=josn_res, ratio_dict=ratio_dict), fw)
+    else:
+        dt = {}
+        dist_dict = {}
+        for fname in sorted(os.listdir(source)):
+            opt.source = os.path.join(source, fname)
+            s, josn_res, ratio_dict = run(**vars(opt))
+            s = s.strip().split(' ')
+            name = s[0].split('/')[-1].split('.')[0]
+            dt[name] = list(map(int, s[1:]))
+            dist_dict[name] = dict(id_dict=josn_res, ratio_dict=ratio_dict)
+        import pickle
+        fw = open('./json/result.pkl', 'wb')
+        pickle.dump(dist_dict, fw)
+        gt = parse(f'./txt/{opt.gt}')
+        res = metric(gt, dt)
+        for k, v in res.items():
+            print(k)
+            print(v)
+        print(np.mean([v['acc'] for k, v in res.items()]))
 
 
 if __name__ == "__main__":

@@ -1,10 +1,12 @@
 import numpy as np
 
-gt_file = '../txt/gt.txt'
+gt_file = '../txt/gt_full_filter32_remove.txt'
 
 bytetrack_file = '../txt/pt.txt'
 tensorrt_file = '../txt/tensorrt.txt'
-tensorrt_buffer30_file = '../txt/tensorrt_buffer_30_countthres480_filter32.txt'
+tensorrt_buffer30_file = '../txt/tensorrt_buffer_30.txt'
+interval3 = '../txt/track_buffer90_countthres480_filter32_full.txt'
+interval2 = '../txt/track_buffer90_countthres360_filter32_full_inter2_new.txt'
 
 
 def parse(txt_file):
@@ -13,6 +15,7 @@ def parse(txt_file):
     for d in data:
         d = d.strip().split(' ')
         name = d[0].split('/')[-1].split('.')[0]
+        print(d)
         res[name] = list(map(int, d[1:]))
     return res
 
@@ -36,19 +39,10 @@ def metric(data1, data2):
 if __name__ == '__main__':
     import numpy as np
     gt = parse(gt_file)
-    tensorrt_res = parse(tensorrt_buffer30_file)
+    tensorrt_res = parse(interval3)
     res = metric(gt, tensorrt_res)
     for k,v in res.items():
-        print(k)
         print(v)
     print(np.mean([v['acc'] for k,v in res.items()]))
-    #
-    # from scipy.interpolate import interp1d
-    #
-    # boundary = [5, 15]
-    # area = 45
-    # area = np.clip(area, 32, 720)
-    # print(area)
-    # m = interp1d([32, 720], [boundary[0], boundary[1]])
-    # res = int(m(area))
-    # print(res)
+    print(np.mean([v['precision'] for k, v in res.items()]))
+    print(np.mean([v['recall'] for k, v in res.items()]))

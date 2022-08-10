@@ -9,7 +9,7 @@ from tqdm import tqdm
 CLASS_NAMES_1 = ['0', '1', '2', '3']
 
 
-def label_txtjson2txt(json_file, txt_file, h, w):
+def json2txt(json_file, txt_file, h, w):
     with open(json_file, 'r') as load_f:
         gt_json = json.load(load_f)
         objects = gt_json['shapes']
@@ -56,12 +56,12 @@ def label_txtjson2txt(json_file, txt_file, h, w):
                 f.close()
 
 
-def convert(mode='val'):
+def convert(mode='train'):
     count = 0
-    path = f'../dataset/qianhai_clean/images/{mode}/add_20220616/'
+    path = f'../datasets/qianhai_clean/images/{mode}/new_16/'
 
-    os.makedirs(f'../dataset/qianhai_clean/labels/{mode}/add_20220616/', exist_ok=True)
-    fi = open(f'add_20220616_{mode}.txt', 'w')
+    os.makedirs(f'../datasets/qianhai_clean/labels/{mode}/new_16/', exist_ok=True)
+    fi = open(f'new_16.txt', 'w')
     for root, dirs, files in os.walk(path):
         for filename in tqdm(files):
             if filename.endswith('jpg'):

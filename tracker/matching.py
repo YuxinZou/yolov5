@@ -49,6 +49,110 @@ def linear_assignment(cost_matrix, thresh):
     matches = np.asarray(matches)
     return matches, unmatched_a, unmatched_b
 
+import math
+import torch
+def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
+    # Returns Intersection over Union (IoU) of box1(1,4) to box2(n,4)
+
+    # Get the coordinates of bounding boxes
+    if xywh:  # transform from xywh to xyxy
+        (x1, y1, w1, h1), (x2, y2, w2, h2) = box1.chunk(4, 1), box2.chunk(4, 1)
+        w1_, h1_, w2_, h2_ = w1 / 2, h1 / 2, w2 / 2, h2 / 2
+        b1_x1, b1_x2, b1_y1, b1_y2 = x1 - w1_, x1 + w1_, y1 - h1_, y1 + h1_
+        b2_x1, b2_x2, b2_y1, b2_y2 = x2 - w2_, x2 + w2_, y2 - h2_, y2 + h2_
+    else:  # x1, y1, x2, y2 = box1
+        b1_x1, b1_y1, b1_x2, b1_y2 = box1.chunk(4, 1)
+        b2_x1, b2_y1, b2_x2, b2_y2 = box2.chunk(4, 1)
+        w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1
+        w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1
+    # import pdb
+    # pdb.set_trace()
+    # Intersection area
+    inter = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
+            (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
+
+    # Union Area
+    union = w1 * h1 + w2 * h2 - inter + eps
+
+    # IoU
+    iou = inter / union
+    if CIoU or DIoU or GIoU:
+        cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)  # convex (smallest enclosing box) width
+        ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)  # convex height
+        if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
+            c2 = cw ** 2 + ch ** 2 + eps  # convex diagonal squared
+            rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # center dist ** 2
+            if CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
+                v = (4 / math.pi ** 2) * torch.pow(torch.atan(w2 / (h2 + eps)) - torch.atan(w1 / (h1 + eps)), 2)
+                with torch.no_grad():
+                    alpha = v / (v - iou + (1 + eps))
+                return iou - (rho2 / c2 + v * alpha)  # CIoU
+            return iou - rho2 / c2  # DIoU
+        c_area = cw * ch + eps  # convex area
+        return iou - (c_area - union) / c_area  # GIoU https://arxiv.org/pdf/1902.09630.pdf
+    return iou.T  # IoU
+
+
+def ciou_loss(pred, target, eps=1e-7):
+    r"""`Implementation of paper `Enhancing Geometric Factors into
+    Model Learning and Inference for Object Detection and Instance
+    Segmentation <https://arxiv.org/abs/2005.03572>`_.
+    Code is modified from https://github.com/Zzh-tju/CIoU.
+    Args:
+        pred (Tensor): Predicted bboxes of format (x1, y1, x2, y2),
+            shape (n, 4).
+        target (Tensor): Corresponding gt bboxes, shape (n, 4).
+        eps (float): Eps to avoid log(0).
+    Return:
+        Tensor: Loss tensor.
+    """
+    # overlap
+    lt = torch.max(pred[:, :2], target[:, :2])
+    rb = torch.min(pred[:, 2:], target[:, 2:])
+    wh = (rb - lt).clamp(min=0)
+    overlap = wh[:, 0] * wh[:, 1]
+
+    # union
+    ap = (pred[:, 2] - pred[:, 0]) * (pred[:, 3] - pred[:, 1])
+    ag = (target[:, 2] - target[:, 0]) * (target[:, 3] - target[:, 1])
+    union = ap + ag - overlap + eps
+
+    # IoU
+    ious = overlap / union
+
+    # enclose area
+    enclose_x1y1 = torch.min(pred[:, :2], target[:, :2])
+    enclose_x2y2 = torch.max(pred[:, 2:], target[:, 2:])
+    enclose_wh = (enclose_x2y2 - enclose_x1y1).clamp(min=0)
+
+    cw = enclose_wh[:, 0]
+    ch = enclose_wh[:, 1]
+
+    c2 = cw**2 + ch**2 + eps
+
+    b1_x1, b1_y1 = pred[:, 0], pred[:, 1]
+    b1_x2, b1_y2 = pred[:, 2], pred[:, 3]
+    b2_x1, b2_y1 = target[:, 0], target[:, 1]
+    b2_x2, b2_y2 = target[:, 2], target[:, 3]
+
+    w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
+    w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
+
+    left = ((b2_x1 + b2_x2) - (b1_x1 + b1_x2))**2 / 4
+    right = ((b2_y1 + b2_y2) - (b1_y1 + b1_y2))**2 / 4
+    rho2 = left + right
+
+    factor = 4 / math.pi**2
+    v = factor * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
+
+    with torch.no_grad():
+        alpha = (ious > 0.5).float() * v / (1 - ious + v)
+
+    # CIoU
+    cious = ious - (rho2 / c2 + alpha * v)
+    cious = (cious + 1) / 2
+    return cious
+
 
 def ious(atlbrs, btlbrs):
     """
@@ -61,6 +165,12 @@ def ious(atlbrs, btlbrs):
     ious = np.zeros((len(atlbrs), len(btlbrs)), dtype=np.float)
     if ious.size == 0:
         return ious
+
+    # atlbrs = torch.from_numpy(np.ascontiguousarray(atlbrs, dtype=np.float))
+    # btlbrs = torch.from_numpy(np.ascontiguousarray(btlbrs, dtype=np.float))
+    # for i in range(atlbrs.shape[0]):
+    #     iou = ciou_loss(atlbrs[[i], :], btlbrs)
+    #     ious[i] = iou
 
     ious = bbox_ious(
         np.ascontiguousarray(atlbrs, dtype=np.float),

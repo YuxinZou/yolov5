@@ -15,6 +15,7 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 from scipy.interpolate import interp1d
+from tqdm import tqdm
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # yolov5 strongsort root directory
@@ -152,8 +153,7 @@ def run(
 
     static_dict = {}
     all_count = [[], [], [], [], []]
-    for frame_idx, (path, im, im0s, vid_cap, s) in enumerate(dataset):
-        print(frame_idx)
+    for frame_idx, (path, im, im0s, vid_cap, s) in tqdm(enumerate(dataset)):
         timer.tic()
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
@@ -206,13 +206,11 @@ def run(
 
                 det = det.cpu().data.numpy()
                 online_tlwhs = []
-                online_area = []
                 online_ids = []
                 online_scores = []
                 for c in range(4):
                     x = det[(det[:, 5:6] == c).any(1)]
                     if x is not None and len(x):
-                        cv2.imwrite('test.jpg', im0s)
                         online_targets = trackers[c].update(x[:, :5], im0s)
                         for t in online_targets:
                             tlwh = t.tlwh
@@ -327,7 +325,7 @@ def parse_opt():
     parser.add_argument('--area-boundary', default=(100, 720), nargs=2, type=int)
     parser.add_argument("--track-thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track-buffer", type=int, default=10, help="the frames for keep lost tracks")
-    parser.add_argument("--match-thresh", type=float, default=0.4, help="matching threshold for tracking")
+    parser.add_argument("--match-thresh", type=float, default=0.8, help="matching threshold for tracking")
     parser.add_argument(
         "--aspect_ratio_thresh", type=float, default=100,
         help="threshold for filtering out boxes of which aspect ratio are above the given value."

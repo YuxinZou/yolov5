@@ -1,0 +1,8 @@
+{
+  "name": "qianhai-15fps",
+  "Image": "harbor.smoa.cc/public/smore_core_timm:v2.1.3.cu11",
+  "arch": "ampere",
+  "Command": "cd ~/code/yolov5/;~/miniconda3/envs/yolov5/bin/python track_bytetrack_v2_v3.py --yolo-weights runs/train/fusion2/weights/best.onnx --half --device 0 --source images/qianhai_1_15fps --imgsz 736 1280 --name qianhai_15fps_polyintersection_v3 --exist-ok --conf-thres 0.1 --area-thres 32 --track-buffer 240 --count-thres 10 30 --area-boundary 100 480 --save-vid",
+  "GPU": 1,
+  "DEBUG": false
+}
